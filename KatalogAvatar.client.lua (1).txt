@@ -1,0 +1,827 @@
+-- KATALOG AVATAR • LocalScript
+-- Letakkan di StarterPlayer > StarterPlayerScripts.
+-- Hapus/nonaktifkan GUI katalog versi lama agar tidak muncul dua kali.
+-- Catatan:
+--   1. Aktifkan Game Settings > Security > Allow Third Party Sales agar item kreator lain bisa dibeli.
+--   2. Untuk pembelian item UGC Limited, pasang juga KatalogAvatar.server.lua di ServerScriptService.
+
+local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
+local AvatarEditorService = game:GetService("AvatarEditorService")
+local AssetService = game:GetService("AssetService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local old = playerGui:FindFirstChild("KatalogAvatarGui")
+if old then old:Destroy() end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "KatalogAvatarGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+local function create(class, props, parent)
+    local instance = Instance.new(class)
+    for key, value in pairs(props) do
+        instance[key] = value
+    end
+    instance.Parent = parent
+    return instance
+end
+
+local function corner(parent, radius)
+    return create("UICorner", {CornerRadius = UDim.new(0, radius)}, parent)
+end
+
+local function stroke(parent, color, transparency)
+    return create("UIStroke", {
+        Color = color,
+        Transparency = transparency,
+        Thickness = 1,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    }, parent)
+end
+
+local function gradient(parent, a, b)
+    return create("UIGradient", {Color = ColorSequence.new(a, b), Rotation = 90}, parent)
+end
+
+local pureWhite = Color3.fromRGB(255, 255, 255)
+local white = Color3.fromRGB(244, 246, 251)
+local muted = Color3.fromRGB(154, 163, 184)
+local blue = Color3.fromRGB(59, 130, 246)
+local disabledBg = Color3.fromRGB(55, 62, 79)
+
+-- Memisahkan UIGradient tombol dari TextLabel agar warna teks tetap putih bersih
+-- dan warna gradien tidak terkalikan ganda dengan BackgroundColor3.
+local function createGradientButton(props, textProps, colorA, colorB, radius, parent)
+    local buttonProps = {
+        BackgroundColor3 = pureWhite,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = true,
+    }
+    for key, value in pairs(props) do
+        buttonProps[key] = value
+    end
+    local button = create("TextButton", buttonProps, parent)
+    corner(button, radius)
+    local btnGradient = gradient(button, colorA, colorB)
+
+    local labelProps = {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        TextColor3 = white,
+        Font = Enum.Font.GothamBold,
+        TextSize = 15,
+    }
+    for key, value in pairs(textProps) do
+        labelProps[key] = value
+    end
+    local label = create("TextLabel", labelProps, button)
+    return button, label, btnGradient
+end
+
+local open = createGradientButton(
+    {
+        Name = "BukaKatalog",
+        Size = UDim2.fromOffset(155, 48),
+        Position = UDim2.new(0, 16, 0.5, -24),
+    },
+    {
+        Text = "✦  Buka Katalog",
+        TextSize = 15,
+    },
+    Color3.fromRGB(79, 156, 249),
+    Color3.fromRGB(37, 99, 235),
+    14,
+    gui
+)
+
+-- Menggunakan TextButton dengan Modal = true & Active = true agar:
+-- 1) Klik/scroll tidak tembus ke tombol belakang atau dunia 3D,
+-- 2) Kursor mouse otomatis terbuka saat mode First-Person.
+local overlay = create("TextButton", {
+    Name = "Overlay",
+    Size = UDim2.fromScale(1, 1),
+    BackgroundColor3 = Color3.fromRGB(7, 10, 18),
+    BackgroundTransparency = 0.35,
+    BorderSizePixel = 0,
+    Text = "",
+    AutoButtonColor = false,
+    Active = true,
+    Modal = true,
+    Visible = false,
+}, gui)
+
+-- Dimensi dasar 500x460; UIScale mengecilkannya agar muat di layar kecil.
+local panel = create("Frame", {
+    Name = "Panel",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(500, 460),
+    BackgroundColor3 = pureWhite,
+    BorderSizePixel = 0,
+    Active = true,
+}, overlay)
+corner(panel, 20)
+stroke(panel, Color3.fromRGB(120, 135, 162), 0.75)
+gradient(panel, Color3.fromRGB(31, 35, 48), Color3.fromRGB(20, 22, 31))
+local panelScale = create("UIScale", {Scale = 1}, panel)
+
+local logo = create("Frame", {
+    Size = UDim2.fromOffset(46, 46),
+    Position = UDim2.fromOffset(20, 20),
+    BackgroundColor3 = pureWhite,
+    BorderSizePixel = 0,
+}, panel)
+corner(logo, 14)
+gradient(logo, Color3.fromRGB(245, 158, 11), Color3.fromRGB(239, 68, 68))
+create("TextLabel", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Text = "✦",
+    TextSize = 26,
+    TextColor3 = white,
+    Font = Enum.Font.GothamBold,
+}, logo)
+
+create("TextLabel", {
+    Size = UDim2.fromOffset(330, 25),
+    Position = UDim2.fromOffset(78, 19),
+    BackgroundTransparency = 1,
+    Text = "Katalog Avatar",
+    TextColor3 = white,
+    Font = Enum.Font.GothamBold,
+    TextSize = 20,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+create("TextLabel", {
+    Size = UDim2.fromOffset(330, 20),
+    Position = UDim2.fromOffset(78, 44),
+    BackgroundTransparency = 1,
+    Text = "Temukan item favoritmu di sini",
+    TextColor3 = muted,
+    Font = Enum.Font.Gotham,
+    TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+
+local close = create("TextButton", {
+    Name = "TutupKatalog",
+    Size = UDim2.fromOffset(38, 38),
+    Position = UDim2.new(1, -58, 0, 24),
+    BackgroundColor3 = Color3.fromRGB(47, 52, 66),
+    BorderSizePixel = 0,
+    Text = "×",
+    TextColor3 = white,
+    Font = Enum.Font.Gotham,
+    TextSize = 26,
+}, panel)
+corner(close, 12)
+
+create("Frame", {
+    Position = UDim2.fromOffset(20, 80),
+    Size = UDim2.new(1, -40, 0, 1),
+    BorderSizePixel = 0,
+    BackgroundColor3 = Color3.fromRGB(55, 61, 77),
+}, panel)
+
+create("TextLabel", {
+    Position = UDim2.fromOffset(20, 94),
+    Size = UDim2.fromOffset(260, 20),
+    BackgroundTransparency = 1,
+    Text = "CARI ITEM BERDASARKAN ID",
+    TextColor3 = muted,
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+
+local modeFrame = create("Frame", {
+    Name = "ModeSelector",
+    Position = UDim2.new(1, -156, 0, 91),
+    Size = UDim2.fromOffset(136, 26),
+    BackgroundColor3 = Color3.fromRGB(35, 40, 55),
+    BorderSizePixel = 0,
+}, panel)
+corner(modeFrame, 8)
+stroke(modeFrame, Color3.fromRGB(89, 103, 127), 0.7)
+
+local assetTab = create("TextButton", {
+    Name = "AssetTab",
+    Position = UDim2.fromOffset(2, 2),
+    Size = UDim2.fromOffset(65, 22),
+    BackgroundColor3 = blue,
+    BorderSizePixel = 0,
+    Text = "Asset",
+    TextColor3 = white,
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+}, modeFrame)
+corner(assetTab, 6)
+
+local bundleTab = create("TextButton", {
+    Name = "BundleTab",
+    Position = UDim2.fromOffset(69, 2),
+    Size = UDim2.fromOffset(65, 22),
+    BackgroundColor3 = blue,
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    Text = "Bundle",
+    TextColor3 = muted,
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+}, modeFrame)
+corner(bundleTab, 6)
+
+local input = create("TextBox", {
+    Name = "AssetId",
+    Position = UDim2.fromOffset(20, 124),
+    Size = UDim2.fromOffset(347, 46),
+    BackgroundColor3 = Color3.fromRGB(35, 40, 55),
+    BorderSizePixel = 0,
+    TextColor3 = white,
+    PlaceholderColor3 = muted,
+    PlaceholderText = "Masukkan Asset ID atau link...",
+    Text = "",
+    ClearTextOnFocus = false,
+    Font = Enum.Font.Gotham,
+    TextSize = 14,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextTruncate = Enum.TextTruncate.AtEnd,
+}, panel)
+corner(input, 10)
+stroke(input, Color3.fromRGB(89, 103, 127), 0.65)
+create("UIPadding", {PaddingLeft = UDim.new(0, 13), PaddingRight = UDim.new(0, 10)}, input)
+
+local search, searchLabel = createGradientButton(
+    {
+        Name = "CariButton",
+        Position = UDim2.fromOffset(378, 124),
+        Size = UDim2.fromOffset(102, 46),
+    },
+    {
+        Text = "Cari",
+        TextSize = 14,
+    },
+    Color3.fromRGB(79, 156, 249),
+    Color3.fromRGB(37, 99, 235),
+    10,
+    panel
+)
+
+local card = create("Frame", {
+    Position = UDim2.fromOffset(20, 185),
+    Size = UDim2.fromOffset(460, 170),
+    BackgroundColor3 = Color3.fromRGB(35, 40, 55),
+    BorderSizePixel = 0,
+}, panel)
+corner(card, 14)
+stroke(card, Color3.fromRGB(95, 106, 130), 0.75)
+
+local image = create("ImageLabel", {
+    Position = UDim2.fromOffset(15, 18),
+    Size = UDim2.fromOffset(134, 134),
+    BackgroundColor3 = Color3.fromRGB(48, 55, 74),
+    BorderSizePixel = 0,
+    Image = "",
+    ScaleType = Enum.ScaleType.Fit,
+}, card)
+corner(image, 12)
+
+local placeholder = create("TextLabel", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Text = "✦",
+    TextColor3 = Color3.fromRGB(103, 119, 149),
+    Font = Enum.Font.GothamBold,
+    TextSize = 42,
+}, image)
+
+local function syncPlaceholder()
+    placeholder.Visible = (image.Image == "" or not image.IsLoaded)
+end
+image:GetPropertyChangedSignal("IsLoaded"):Connect(syncPlaceholder)
+image:GetPropertyChangedSignal("Image"):Connect(syncPlaceholder)
+
+create("TextLabel", {
+    Position = UDim2.fromOffset(165, 23),
+    Size = UDim2.fromOffset(278, 18),
+    BackgroundTransparency = 1,
+    Text = "DETAIL ITEM",
+    TextColor3 = muted,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+}, card)
+
+local itemName = create("TextLabel", {
+    Position = UDim2.fromOffset(165, 46),
+    Size = UDim2.fromOffset(278, 48),
+    BackgroundTransparency = 1,
+    Text = "Belum ada item",
+    TextColor3 = white,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true,
+    TextTruncate = Enum.TextTruncate.AtEnd,
+    Font = Enum.Font.GothamBold,
+    TextSize = 17,
+}, card)
+
+local status = create("TextLabel", {
+    Position = UDim2.fromOffset(165, 101),
+    Size = UDim2.fromOffset(278, 54),
+    BackgroundTransparency = 1,
+    Text = "Masukkan ID, lalu tekan Cari.",
+    TextColor3 = muted,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true,
+    Font = Enum.Font.Gotham,
+    TextSize = 13,
+}, card)
+
+local buy, buyLabel, buyGradient = createGradientButton(
+    {
+        Name = "BeliButton",
+        Position = UDim2.fromOffset(20, 370),
+        Size = UDim2.fromOffset(460, 48),
+    },
+    {
+        Text = "Beli Item",
+        TextSize = 16,
+    },
+    Color3.fromRGB(34, 197, 94),
+    Color3.fromRGB(21, 128, 61),
+    12,
+    panel
+)
+
+create("TextLabel", {
+    Position = UDim2.fromOffset(20, 426),
+    Size = UDim2.fromOffset(460, 20),
+    BackgroundTransparency = 1,
+    Text = "Pembelian diproses melalui Roblox",
+    TextColor3 = muted,
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+}, panel)
+
+local function setBuyState(enabled, text)
+    buyLabel.Text = text or "Beli Item"
+    buyGradient.Enabled = enabled
+    buy.AutoButtonColor = enabled
+    buy.BackgroundColor3 = enabled and pureWhite or disabledBg
+    buyLabel.TextColor3 = enabled and white or muted
+end
+setBuyState(false, "Beli Item")
+
+-- Scaling responsif dengan batas minimum agar tidak negatif/terpotong di layar kecil
+local cameraConnection
+local function updateScale()
+    local camera = Workspace.CurrentCamera
+    if not camera then return end
+    local view = camera.ViewportSize
+    if view.X <= 0 or view.Y <= 0 then return end
+    local rawScale = math.min(1, (view.X - 24) / 500, (view.Y - 48) / 460)
+    panelScale.Scale = math.clamp(rawScale, 0.25, 1)
+end
+
+local function bindCamera()
+    if cameraConnection then
+        cameraConnection:Disconnect()
+        cameraConnection = nil
+    end
+    local camera = Workspace.CurrentCamera
+    if camera then
+        cameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+    end
+    updateScale()
+end
+local workspaceCameraConnection = Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCamera)
+bindCamera()
+
+open.Activated:Connect(function()
+    overlay.Visible = true
+end)
+close.Activated:Connect(function()
+    overlay.Visible = false
+end)
+
+-- Daftar tipe asset non-avatar agar ID Place/Audio/Decal/Model/Script tidak salah dianggap item avatar
+local NON_AVATAR_ASSET_TYPES = {
+    [1] = "Image",
+    [3] = "Audio",
+    [4] = "Mesh",
+    [5] = "Script",
+    [9] = "Place / Game",
+    [10] = "Model",
+    [13] = "Decal",
+    [21] = "Badge",
+    [22] = "Group Emblem",
+    [24] = "Animation",
+    [34] = "Game Pass",
+    [38] = "Plugin",
+    [39] = "SolidModel",
+    [40] = "MeshPart",
+    [62] = "Video",
+    [73] = "FontFamily",
+    [74] = "FontFace",
+    [91] = "VoxelFragment",
+    [93] = "TextDocument",
+}
+
+local MAX_SAFE_ID_STR = "9007199254740991" -- 2^53 - 1 (batas integer presisi penuh Luau)
+
+local searchMode = "Asset" -- "Asset" | "Bundle"
+local selectedItem = nil -- { id = number, kind = "Asset" | "Bundle", isLimited = boolean }
+local unbuyableReason = nil
+local requestNumber = 0
+local inFlightQuery = nil
+local lastCompletedQuery = nil
+local lastCompletedAt = 0
+
+local function resetItemView()
+    selectedItem = nil
+    unbuyableReason = nil
+    inFlightQuery = nil
+    lastCompletedQuery = nil
+    searchLabel.Text = "Cari"
+    image.Image = ""
+    placeholder.Visible = true
+    itemName.Text = "Belum ada item"
+    status.Text = "Masukkan " .. searchMode .. " ID, lalu tekan Cari."
+    setBuyState(false, searchMode == "Bundle" and "Beli Bundle" or "Beli Item")
+end
+
+local function setSearchMode(newMode, shouldReset)
+    searchMode = newMode
+    local isAsset = (newMode == "Asset")
+    assetTab.BackgroundTransparency = isAsset and 0 or 1
+    assetTab.TextColor3 = isAsset and white or muted
+    bundleTab.BackgroundTransparency = isAsset and 1 or 0
+    bundleTab.TextColor3 = isAsset and muted or white
+    input.PlaceholderText = isAsset and "Masukkan Asset ID atau link..." or "Masukkan Bundle ID atau link..."
+
+    if shouldReset then
+        requestNumber += 1
+        resetItemView()
+    end
+end
+
+assetTab.Activated:Connect(function()
+    if searchMode ~= "Asset" then
+        setSearchMode("Asset", true)
+    end
+end)
+bundleTab.Activated:Connect(function()
+    if searchMode ~= "Bundle" then
+        setSearchMode("Bundle", true)
+    end
+end)
+
+input:GetPropertyChangedSignal("Text"):Connect(function()
+    requestNumber += 1
+    resetItemView()
+end)
+
+-- Mengekstrak ID dari angka langsung, rbxassetid://, maupun URL katalog/bundle Roblox
+local function parseCatalogInput(rawText)
+    local trimmed = rawText:match("^%s*(.-)%s*$") or ""
+    if trimmed == "" then
+        return nil, nil, nil
+    end
+
+    local detectedMode = nil
+    local rawDigits = trimmed:match("^%d+$")
+
+    if not rawDigits then
+        local bundleDigits = trimmed:match("/bundles/(%d+)")
+        local catalogDigits = trimmed:match("/catalog/(%d+)")
+        local assetUriDigits = trimmed:match("rbxassetid://(%d+)")
+            or trimmed:match("[?&]id=(%d+)")
+
+        if bundleDigits then
+            rawDigits = bundleDigits
+            detectedMode = "Bundle"
+        elseif catalogDigits then
+            rawDigits = catalogDigits
+            detectedMode = "Asset"
+        elseif assetUriDigits then
+            rawDigits = assetUriDigits
+            detectedMode = "Asset"
+        else
+            return nil, nil, nil
+        end
+    end
+
+    local normalized = rawDigits:gsub("^0+", "")
+    if normalized == "" then
+        return nil, nil, nil
+    end
+
+    -- Cegah pembulatan diam-diam atau overflow di luar batas integer presisi penuh Luau (2^53 - 1)
+    if #normalized > 16 or (#normalized == 16 and normalized > MAX_SAFE_ID_STR) then
+        return nil, nil, nil
+    end
+
+    local numericId = tonumber(normalized)
+    if not numericId or numericId <= 0 then
+        return nil, nil, nil
+    end
+
+    return numericId, normalized, detectedMode
+end
+
+local function fetchAssetInfo(assetId)
+    if MarketplaceService.GetProductInfoAsync then
+        return MarketplaceService:GetProductInfoAsync(assetId, Enum.InfoType.Asset)
+    end
+    return MarketplaceService:GetProductInfo(assetId, Enum.InfoType.Asset)
+end
+
+local function fetchBundleInfo(bundleId)
+    -- Coba AvatarEditorService lebih dulu karena menyertakan harga & status jual bundle
+    local okDetails, details = pcall(function()
+        if AvatarEditorService.GetItemDetailsAsync then
+            return AvatarEditorService:GetItemDetailsAsync(bundleId, Enum.AvatarItemType.Bundle)
+        end
+        return AvatarEditorService:GetItemDetails(bundleId, Enum.AvatarItemType.Bundle)
+    end)
+    if okDetails and type(details) == "table" and details.Name then
+        return details, "AvatarEditor"
+    end
+
+    local okBundle, bundleData = pcall(function()
+        return AssetService:GetBundleDetailsAsync(bundleId)
+    end)
+    if okBundle and type(bundleData) == "table" and bundleData.Name then
+        return bundleData, "AssetService"
+    end
+
+    return nil, nil
+end
+
+local function getPurchaseRemote()
+    local remote = ReplicatedStorage:FindFirstChild("KatalogAvatarPurchase")
+    if remote and remote:IsA("RemoteEvent") then
+        return remote
+    end
+    return nil
+end
+
+local function findItem()
+    local id, idStr, detectedMode = parseCatalogInput(input.Text)
+    if detectedMode and detectedMode ~= searchMode then
+        setSearchMode(detectedMode, false)
+    end
+
+    if not id or not idStr then
+        requestNumber += 1
+        selectedItem = nil
+        inFlightQuery = nil
+        searchLabel.Text = "Cari"
+        image.Image = ""
+        placeholder.Visible = true
+        itemName.Text = "ID tidak valid"
+        unbuyableReason = "Masukkan angka ID atau link katalog yang benar."
+        status.Text = unbuyableReason
+        setBuyState(false, searchMode == "Bundle" and "Beli Bundle" or "Beli Item")
+        return
+    end
+
+    local queryKey = searchMode .. ":" .. idStr
+    -- Cegah spam request identik saat sedang loading atau diklik beruntun sangat cepat
+    if inFlightQuery == queryKey then
+        return
+    end
+    if lastCompletedQuery == queryKey and (os.clock() - lastCompletedAt) < 0.75 then
+        return
+    end
+
+    requestNumber += 1
+    local currentRequest = requestNumber
+    inFlightQuery = queryKey
+    selectedItem = nil
+    unbuyableReason = nil
+    image.Image = ""
+    placeholder.Visible = true
+    searchLabel.Text = "..."
+    itemName.Text = "Mencari " .. string.lower(searchMode) .. "..."
+    status.Text = "Mohon tunggu sebentar."
+    setBuyState(false, searchMode == "Bundle" and "Beli Bundle" or "Beli Item")
+
+    if searchMode == "Bundle" then
+        local info, source = fetchBundleInfo(id)
+        if requestNumber ~= currentRequest then return end
+        inFlightQuery = nil
+        searchLabel.Text = "Cari"
+
+        if not info then
+            itemName.Text = "Bundle tidak ditemukan"
+            unbuyableReason = "Periksa Bundle ID dan coba lagi."
+            status.Text = unbuyableReason
+            return
+        end
+
+        lastCompletedQuery = queryKey
+        lastCompletedAt = os.clock()
+        itemName.Text = info.Name or "Bundle avatar"
+        image.Image = "rbxthumb://type=BundleThumbnail&id=" .. idStr .. "&w=150&h=150"
+
+        if source == "AvatarEditor" then
+            if info.Owned == true then
+                unbuyableReason = "Kamu sudah memiliki bundle ini."
+                status.Text = unbuyableReason
+                setBuyState(false, "Sudah Dimiliki")
+                return
+            end
+            local bundleResale = info.LowestResalePrice or info.LowestPrice
+            local bundleOffSale = (info.PriceStatus == "Off Sale")
+                or (info.PriceStatus == "No Resellers")
+                or (info.IsPurchasable == false and bundleResale == nil)
+            if bundleOffSale then
+                unbuyableReason = "Bundle ini sedang tidak dijual (Off-Sale)."
+                status.Text = unbuyableReason
+                setBuyState(false, "Tidak Dijual")
+                return
+            end
+
+            selectedItem = {id = id, kind = "Bundle", isLimited = false}
+            setBuyState(true, "Beli Bundle")
+            if info.PriceStatus == "Free" or (info.IsPurchasable == true and info.Price == 0) then
+                status.Text = "Harga: Gratis (0 Robux)\nHarga final ada di prompt Roblox."
+            elseif info.Price ~= nil and info.Price > 0 then
+                status.Text = "Harga: " .. tostring(info.Price) .. " Robux\nHarga final ada di prompt Roblox."
+            elseif bundleResale ~= nil then
+                status.Text = "Harga mulai: " .. tostring(bundleResale) .. " Robux\nHarga final ada di prompt Roblox."
+            else
+                status.Text = "Cek ketersediaan & harga di prompt Roblox."
+            end
+        else
+            selectedItem = {id = id, kind = "Bundle", isLimited = false}
+            setBuyState(true, "Beli Bundle")
+            status.Text = "Bundle ditemukan. Cek harga di prompt Roblox."
+        end
+        return
+    end
+
+    -- Mode Pencarian Asset
+    local ok, info = pcall(function()
+        return fetchAssetInfo(id)
+    end)
+    if requestNumber ~= currentRequest then return end
+    inFlightQuery = nil
+    searchLabel.Text = "Cari"
+
+    if not ok or type(info) ~= "table" then
+        itemName.Text = "Item tidak ditemukan"
+        unbuyableReason = "Periksa Asset ID dan coba lagi."
+        status.Text = unbuyableReason
+        return
+    end
+
+    lastCompletedQuery = queryKey
+    lastCompletedAt = os.clock()
+    itemName.Text = info.Name or "Item avatar"
+    image.Image = "rbxthumb://type=Asset&id=" .. idStr .. "&w=150&h=150"
+
+    local nonAvatarLabel = NON_AVATAR_ASSET_TYPES[info.AssetTypeId]
+    if nonAvatarLabel then
+        unbuyableReason = "ID ini bertipe " .. nonAvatarLabel .. ", bukan item avatar."
+        status.Text = unbuyableReason
+        setBuyState(false, "Bukan Item Avatar")
+        return
+    end
+
+    if info.CanBeSoldInThisGame == false then
+        unbuyableReason = "Item ini tidak diizinkan kreatornya dijual di dalam game."
+        status.Text = unbuyableReason
+        setBuyState(false, "Tidak Dijual di Game")
+        return
+    end
+
+    local collectibles = type(info.CollectiblesItemDetails) == "table" and info.CollectiblesItemDetails or nil
+    local isCollectibleLimited = (collectibles ~= nil and collectibles.IsLimited == true)
+        or info.IsLimited == true
+        or info.IsLimitedUnique == true
+
+    local lowestResale = collectibles and collectibles.CollectibleLowestResalePrice or nil
+    local canPurchase
+    if collectibles ~= nil then
+        canPurchase = (collectibles.IsForSale == true)
+            or (lowestResale ~= nil)
+            or (info.IsPublicDomain == true)
+    else
+        canPurchase = (info.IsForSale == true) or (info.IsPublicDomain == true)
+    end
+
+    if not canPurchase then
+        unbuyableReason = "Item ini sedang tidak dijual (Off-Sale)."
+        status.Text = unbuyableReason
+        setBuyState(false, "Tidak Dijual")
+        return
+    end
+
+    if isCollectibleLimited and not getPurchaseRemote() then
+        -- Kebijakan Roblox mewajibkan PromptPurchase UGC Limited dipanggil dari Server
+        if collectibles ~= nil and collectibles.IsLimited == true then
+            unbuyableReason = "Item UGC Limited butuh KatalogAvatar.server.lua di ServerScriptService."
+            status.Text = unbuyableReason
+            setBuyState(false, "Perlu Script Server")
+            return
+        end
+    end
+
+    selectedItem = {
+        id = id,
+        kind = "Asset",
+        isLimited = isCollectibleLimited,
+    }
+    setBuyState(true, "Beli Item")
+
+    local primaryOnSale = (info.IsForSale == true)
+        and (collectibles == nil or collectibles.IsForSale == true)
+
+    if info.IsPublicDomain == true or (primaryOnSale and info.PriceInRobux == 0) then
+        status.Text = "Harga: Gratis (0 Robux)\nHarga final ada di prompt Roblox."
+    elseif primaryOnSale and info.PriceInRobux ~= nil and info.PriceInRobux > 0 then
+        status.Text = "Harga: " .. tostring(info.PriceInRobux) .. " Robux\nHarga final ada di prompt Roblox."
+    elseif lowestResale ~= nil then
+        status.Text = "Harga Resale: " .. tostring(lowestResale) .. " Robux\nHarga final ada di prompt Roblox."
+    else
+        status.Text = "Harga cek langsung di prompt Roblox."
+    end
+end
+
+search.Activated:Connect(findItem)
+input.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        findItem()
+    end
+end)
+
+local lastBuyPromptAt = 0
+buy.Activated:Connect(function()
+    if not selectedItem then
+        status.Text = unbuyableReason or "Cari item terlebih dahulu."
+        return
+    end
+
+    if (os.clock() - lastBuyPromptAt) < 0.75 then
+        return
+    end
+    lastBuyPromptAt = os.clock()
+
+    local current = selectedItem
+    local remote = getPurchaseRemote()
+
+    local ok, err = pcall(function()
+        if current.kind == "Bundle" then
+            if remote then
+                remote:FireServer("Bundle", current.id)
+            else
+                MarketplaceService:PromptBundlePurchase(player, current.id)
+            end
+        else
+            if remote and current.isLimited then
+                remote:FireServer("Asset", current.id)
+            else
+                MarketplaceService:PromptPurchase(player, current.id)
+            end
+        end
+    end)
+
+    if not ok then
+        status.Text = "Gagal membuka prompt pembelian."
+        warn("Prompt pembelian gagal:", err)
+    end
+end)
+
+local assetFinishedConn = MarketplaceService.PromptPurchaseFinished:Connect(function(plr, assetId, wasPurchased)
+    if plr == player and selectedItem and selectedItem.kind == "Asset" and selectedItem.id == assetId and wasPurchased then
+        status.Text = "Pembelian berhasil! Item telah masuk ke inventori kamu."
+    end
+end)
+
+local bundleFinishedConn = MarketplaceService.PromptBundlePurchaseFinished:Connect(function(plr, bundleId, wasPurchased)
+    if plr == player and selectedItem and selectedItem.kind == "Bundle" and selectedItem.id == bundleId and wasPurchased then
+        status.Text = "Pembelian bundle berhasil! Cek inventori avatar kamu."
+    end
+end)
+
+gui.Destroying:Connect(function()
+    if cameraConnection then
+        cameraConnection:Disconnect()
+        cameraConnection = nil
+    end
+    workspaceCameraConnection:Disconnect()
+    assetFinishedConn:Disconnect()
+    bundleFinishedConn:Disconnect()
+end)
