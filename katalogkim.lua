@@ -1,9 +1,3 @@
--- KATALOG AVATAR • LocalScript
--- Letakkan di StarterPlayer > StarterPlayerScripts.
--- Hapus/nonaktifkan GUI katalog versi lama agar tidak muncul dua kali.
--- Catatan:
---   1. Aktifkan Game Settings > Security > Allow Third Party Sales agar item kreator lain bisa dibeli.
---   2. Untuk pembelian item UGC Limited, pasang juga KatalogAvatar.server.lua di ServerScriptService.
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
